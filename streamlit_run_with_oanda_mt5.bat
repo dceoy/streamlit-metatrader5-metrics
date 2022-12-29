@@ -1,7 +1,7 @@
 @echo on
 
-python -m streamlit run app.py -- ^
-  --debug ^
-  --mt5-exe="C:\Program Files\OANDA MetaTrader 5\terminal64.exe" ^
+python -m streamlit run %~dp0app\main.py ^
+  --logger.level=debug ^
+  -- ^
   --retry-count=5 ^
-  --sqlite3-path="%~dp0db.sqlite3"
+  --sqlite3="%~dp0db.sqlite3"

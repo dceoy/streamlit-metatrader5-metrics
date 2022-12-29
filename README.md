@@ -16,5 +16,5 @@ Usage
 -----
 
 ```PowerShell
-python -m streamlit run app.py -- --debug
+python -m streamlit run .\app\main.py
 ```

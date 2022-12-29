@@ -27,7 +27,7 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
         df_deal = _fetch_mt5_history_deals(
             **{
                 k: v for k, v in kwargs.items()
-                if k in {'hours', 'date_to', 'group', 'retry_count'}
+                if k in {'date_from', 'date_to', 'group', 'retry_count'}
             }
         )
     except Mt5ResponseError as e:
@@ -38,6 +38,7 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
         raise e
     else:
         df_deal.to_sql('deal', con, if_exists='append')
+        logger.info(f'DB updated: {sqlite3_path}')
     finally:
         Mt5.shutdown()
         con.close()
@@ -90,12 +91,14 @@ def _fetch_mt5_history_deals(date_from, date_to, group=None, retry_count=0):
     for k, v in res.items():
         if v is None:
             raise Mt5ResponseError(f'MetaTrader5.{k}() failed.')
-    return pd.DataFrame(
+    df_deal = pd.DataFrame(
         list(res['history_deals_get']),
         columns=res['history_deals_get'][0]._asdict().keys()
     ).assign(
-        **{k: getattr(res['account_info'], k) for k in {'login', 'server'}}
-    ).set_index(['login', 'server', 'ticket'])
+        login=res['account_info'].login
+    ).set_index(['login', 'ticket'])
+    logger.debug(f'df_deal.shape: {df_deal.shape}')
+    return df_deal
 
 
 def popen_mt5_app(path, seconds_to_wait=5):
@@ -119,16 +122,3 @@ def kill_subprocess(process):
         sys.stdout(stdout)
     if stderr:
         sys.stderr(stderr)
-
-
-def set_log_config(debug=None, info=None):
-    if debug:
-        lv = logging.DEBUG
-    elif info:
-        lv = logging.INFO
-    else:
-        lv = logging.WARNING
-    logging.basicConfig(
-        format='%(asctime)s %(levelname)-8s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S', level=lv
-    )
