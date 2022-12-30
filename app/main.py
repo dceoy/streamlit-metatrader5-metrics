@@ -26,14 +26,16 @@ def main():
 
 
 def _execute_streamlit_app(args):
+    today = date.today()
     st.set_page_config(layout='wide')
     st.header('MetaTrader 5 Trading History')
-    st.sidebar.header('Condition')
-    today = date.today()
-    date_from = st.sidebar.date_input('From:', value=today)
-    date_to = st.sidebar.date_input('To:', value=today)
-    group = st.sidebar.text_input('Filter for symbols:', value='*')
-    if st.sidebar.button('Submit'):
+    with st.sidebar.form('condition'):
+        st.header('Condition')
+        date_from = st.date_input('From:', value=today)
+        date_to = st.date_input('To:', value=today)
+        group = st.text_input('Filter for symbols:', value='*')
+        submitted = st.form_submit_button('Submit')
+    if submitted:
         if date_from > date_to:
             st.error('The date interval is invalid!', icon='🚨')
         else:
