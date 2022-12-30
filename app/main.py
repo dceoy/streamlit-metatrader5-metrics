@@ -2,7 +2,7 @@
 
 import argparse
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 import streamlit as st
 from util import kill_subprocess, popen_mt5_app, update_mt5_metrics_db
@@ -26,25 +26,29 @@ def main():
 
 
 def _execute_streamlit_app(args):
-    st.header('MetaTrader 5 Metrics')
-    st.subheader('Get trading histories')
-    now = datetime.now()
-    datetime_range = ((now - timedelta(days=7)), (now + timedelta(days=1)))
-    date_from, date_to = st.slider(
-        'Datetime Interval:',
-        value=((now - timedelta(days=1)), datetime_range[1]),
-        min_value=datetime_range[0], max_value=datetime_range[1]
-    )
-    group = st.text_input('Filter for symbols:', value='*')
-    if st.button('Submit'):
-        df_deal = update_mt5_metrics_db(
-            sqlite3_path=args.sqlite3, login=args.mt5_login,
-            password=args.mt5_password, server=args.mt5_server,
-            retry_count=args.retry_count, date_from=date_from, date_to=date_to,
-            group=group
-        )
-        st.subheader('Updated Data Frame:')
-        st.write(df_deal)
+    st.set_page_config(layout='wide')
+    st.header('MetaTrader 5 Trading History')
+    st.sidebar.header('Condition')
+    today = date.today()
+    date_from = st.sidebar.date_input('From:', value=today)
+    date_to = st.sidebar.date_input('To:', value=today)
+    group = st.sidebar.text_input('Filter for symbols:', value='*')
+    if st.sidebar.button('Submit'):
+        if date_from > date_to:
+            st.error('The date interval is invalid!', icon='🚨')
+        else:
+            df_deal = update_mt5_metrics_db(
+                sqlite3_path=args.sqlite3, login=args.mt5_login,
+                password=args.mt5_password, server=args.mt5_server,
+                retry_count=args.retry_count,
+                date_from=datetime.combine(date_from, time()),
+                date_to=(
+                    datetime.combine(date_to, time()) + timedelta(days=1)
+                ),
+                group=group
+            )
+            st.subheader('Updated Data Frame')
+            st.write(df_deal)
     else:
         pass
 
