@@ -27,27 +27,38 @@ def main():
 
 def _execute_streamlit_app(args):
     today = date.today()
-    st.set_page_config(layout='wide')
+    st.set_page_config(
+        page_title='MetaTrader 5 Trading History', page_icon='🧊',
+        layout='wide', initial_sidebar_state='auto'
+    )
     st.header('MetaTrader 5 Trading History')
     with st.sidebar.form('condition'):
         st.header('Condition')
-        date_from = st.date_input('From:', value=today)
-        date_to = st.date_input('To:', value=today)
-        group = st.text_input('Filter for symbols:', value='*')
+        st.session_state['date_from'] = st.date_input(
+            'From:', value=(st.session_state.get('date_from') or today)
+        )
+        st.session_state['date_to'] = st.date_input(
+            'To:', value=(st.session_state.get('date_to') or today)
+        )
+        st.session_state['group'] = st.text_input(
+            'Filter for symbols:', value=(st.session_state.get('group') or '*')
+        )
         submitted = st.form_submit_button('Submit')
     if submitted:
-        if date_from > date_to:
+        if st.session_state['date_from'] > st.session_state['date_to']:
             st.error('The date interval is invalid!', icon='🚨')
         else:
             df_deal = update_mt5_metrics_db(
                 sqlite3_path=args.sqlite3, login=args.mt5_login,
                 password=args.mt5_password, server=args.mt5_server,
                 retry_count=args.retry_count,
-                date_from=datetime.combine(date_from, time()),
-                date_to=(
-                    datetime.combine(date_to, time()) + timedelta(days=1)
+                date_from=datetime.combine(
+                    st.session_state['date_from'], time()
                 ),
-                group=group
+                date_to=datetime.combine(
+                    (st.session_state['date_to'] + timedelta(days=1)), time()
+                ),
+                group=st.session_state['group']
             )
             st.subheader('Updated Data Frame')
             st.write(df_deal)
