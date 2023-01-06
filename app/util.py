@@ -14,6 +14,24 @@ class Mt5ResponseError(RuntimeError):
     pass
 
 
+def fetch_db_data(date_from, date_to, group=None, table='deal',
+                  sqlite3_path=':memory:'):
+    sql = (
+        'SELECT * FROM {0} WHERE time >= {1} AND time <= {2}'.format(
+            table, int(date_from.timestamp()), int(date_to.timestamp())
+        ) + (
+            '' if group == '*' or not group else
+            ' AND symbol LIKE {}'.format(group.replace('*', '%'))
+        )
+    )
+    with sqlite3.connect(sqlite3_path) as con:
+        df = pd.read_sql(sql, con)
+    return df.assign(
+        time=lambda d: pd.to_datetime(d['time'], unit='s'),
+        time_msc=lambda d: pd.to_datetime(d['time'], unit='ms')
+    )
+
+
 def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
     logger = logging.getLogger(__name__)
     con = sqlite3.connect(sqlite3_path)
@@ -42,7 +60,6 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
     finally:
         Mt5.shutdown()
         con.close()
-    return df_deal
 
 
 def _initialize_mt5(login=None, password=None, server=None, retry_count=0):

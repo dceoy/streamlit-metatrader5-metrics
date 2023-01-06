@@ -4,8 +4,10 @@ import argparse
 import logging
 from datetime import date, datetime, time, timedelta
 
+import plotly.express as px
 import streamlit as st
-from util import kill_subprocess, popen_mt5_app, update_mt5_metrics_db
+from util import (fetch_db_data, kill_subprocess, popen_mt5_app,
+                  update_mt5_metrics_db)
 
 __version__ = 'v0.0.1'
 
@@ -48,19 +50,31 @@ def _execute_streamlit_app(args):
         if st.session_state['date_from'] > st.session_state['date_to']:
             st.error('The date interval is invalid!', icon='🚨')
         else:
-            df_deal = update_mt5_metrics_db(
+            date_from = datetime.combine(st.session_state['date_from'], time())
+            date_to = datetime.combine(
+                (st.session_state['date_to'] + timedelta(days=1)), time()
+            )
+            update_mt5_metrics_db(
                 sqlite3_path=args.sqlite3, login=args.mt5_login,
                 password=args.mt5_password, server=args.mt5_server,
-                retry_count=args.retry_count,
-                date_from=datetime.combine(
-                    st.session_state['date_from'], time()
-                ),
-                date_to=datetime.combine(
-                    (st.session_state['date_to'] + timedelta(days=1)), time()
-                ),
-                group=st.session_state['group']
+                retry_count=args.retry_count, date_from=date_from,
+                date_to=date_to, group=st.session_state['group']
             )
-            st.subheader('Updated Data Frame')
+            df_deal = fetch_db_data(
+                date_from=date_from, date_to=date_to,
+                group=st.session_state['group'], sqlite3_path=args.sqlite3
+            ).sort_values('time_msc').pipe(
+                lambda d: d[d['entry'].gt(0)]
+            ).assign(
+                instrument=lambda d:
+                (d['symbol'] + ' / ' + d['login'].astype(str))
+            ).assign(
+                pl=lambda d: d.groupby('instrument')['profit'].cumsum(),
+            )
+            st.plotly_chart(
+                px.line(df_deal, x='time', y='pl', color='instrument'),
+                theme='streamlit', use_container_width=True
+            )
             st.write(df_deal)
     else:
         pass
