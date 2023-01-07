@@ -14,16 +14,15 @@ class Mt5ResponseError(RuntimeError):
     pass
 
 
-def fetch_table_names(sqlite3_path=':memory:'):
-    with sqlite3.connect(sqlite3_path) as con:
-        df = pd.read_sql(
-            'SELECT name FROM sqlite_master WHERE type = \'table\';', con
-        )
-    return set(df['name'])
+def create_df_entry(date_from, date_to, group=None, sqlite3_path=':memory:'):
+    return _fetch_table_data(
+        table='deal', date_from=date_from, date_to=date_to, group=group,
+        sqlite3_path=sqlite3_path
+    ).pipe(lambda d: d[d['entry'].gt(0)]).sort_values('time_msc')
 
 
-def fetch_table_data(date_from, date_to, group=None, table='deal',
-                     sqlite3_path=':memory:'):
+def _fetch_table_data(table, date_from, date_to, group=None,
+                      sqlite3_path=':memory:'):
     sql = (
         'SELECT * FROM {0} WHERE time >= {1} AND time <= {2}'.format(
             table, int(date_from.timestamp()), int(date_to.timestamp())
@@ -34,10 +33,15 @@ def fetch_table_data(date_from, date_to, group=None, table='deal',
     )
     with sqlite3.connect(sqlite3_path) as con:
         df = pd.read_sql(sql, con)
-    return df.assign(
-        time=lambda d: pd.to_datetime(d['time'], unit='s'),
-        time_msc=lambda d: pd.to_datetime(d['time'], unit='ms')
-    )
+    return df
+
+
+def fetch_table_names(sqlite3_path=':memory:'):
+    with sqlite3.connect(sqlite3_path) as con:
+        df = pd.read_sql(
+            'SELECT name FROM sqlite_master WHERE type = \'table\';', con
+        )
+    return set(df['name'])
 
 
 def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
@@ -50,7 +54,7 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
                 if k in {'login', 'password', 'server', 'retry_count'}
             }
         )
-        df_deal = _fetch_mt5_history_deals(
+        dfs = _fetch_mt5_history(
             **{
                 k: v for k, v in kwargs.items()
                 if k in {'date_from', 'date_to', 'group', 'retry_count'}
@@ -63,8 +67,10 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
         logger.info('Mt5.last_error(): {}'.format(Mt5.last_error()))
         raise e
     else:
-        df_deal.to_sql('deal', con, if_exists='append')
-        logger.info(f'DB updated: {sqlite3_path}')
+        logger.info(f'Update DB data: {sqlite3_path}')
+        for t, d in dfs.items():
+            d.to_sql(t, con, if_exists='append')
+            logger.info(f'Table data updated: {t}')
     finally:
         Mt5.shutdown()
         con.close()
@@ -91,39 +97,44 @@ def _initialize_mt5(login=None, password=None, server=None, retry_count=0):
         raise Mt5ResponseError('MetaTrader5.initialize() failed.')
 
 
-def _fetch_mt5_history_deals(date_from, date_to, group=None, retry_count=0):
+def _fetch_mt5_history(date_from, date_to, group=None, retry_count=0):
     logger = logging.getLogger(__name__)
     logger.info(f'date_from: {date_from}, date_to: {date_to}, group: {group}')
-    res = {'account_info': None, 'history_deals_get': None}
+    res = {
+        'history_deals_get': None, 'history_orders_get': None,
+        'account_info': None
+    }
     for i in range(1 + max(0, int(retry_count))):
         if all((v is not None) for v in res.values()):
             break
         elif i == 0:
-            logger.info('Fetch MetaTrader5 deals')
+            logger.info('Fetch MetaTrader5 data')
         elif i > 0:
-            logger.warning(
-                'Retry MetaTrader5.account_info()'
-                ' and MetaTrader5.history_deals_get()'
-            )
+            logger.warning('Retry fetching MetaTrader5 data')
             time.sleep(i)
         res = {
-            'account_info': Mt5.account_info(),
             'history_deals_get': Mt5.history_deals_get(
                 date_from, date_to, **({'group': group} if group else dict())
-            )
+            ),
+            'history_orders_get': Mt5.history_orders_get(
+                date_from, date_to, **({'group': group} if group else dict())
+            ),
+            'account_info': Mt5.account_info()
         }
     logger.debug(f'res: {res}')
     for k, v in res.items():
         if v is None:
             raise Mt5ResponseError(f'MetaTrader5.{k}() failed.')
-    df_deal = pd.DataFrame(
-        list(res['history_deals_get']),
-        columns=res['history_deals_get'][0]._asdict().keys()
-    ).assign(
-        login=res['account_info'].login
-    ).set_index(['login', 'ticket'])
-    logger.debug(f'df_deal.shape: {df_deal.shape}')
-    return df_deal
+    return {
+        k: pd.DataFrame(
+            list(res[f'history_{k}s_get']),
+            columns=res[f'history_{k}s_get'][0]._asdict().keys()
+        ).assign(
+            login=res['account_info'].login,
+            server=res['account_info'].server
+        ).set_index(['login', 'ticket'])
+        for k in ['deal', 'order']
+    }
 
 
 def popen_mt5_app(path, seconds_to_wait=5):

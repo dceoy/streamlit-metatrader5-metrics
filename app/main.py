@@ -4,12 +4,14 @@ import argparse
 import logging
 from datetime import date, datetime, time, timedelta
 
+import MetaTrader5 as Mt5
+import pandas as pd
 import plotly.express as px
 import streamlit as st
-from util import (fetch_table_data, fetch_table_names, kill_subprocess,
+from util import (create_df_entry, fetch_table_names, kill_subprocess,
                   popen_mt5_app, update_mt5_metrics_db)
 
-__version__ = 'v0.0.1'
+__version__ = 'v0.0.2'
 
 
 def main():
@@ -37,6 +39,7 @@ def _execute_streamlit_app(args):
         page_title='MetaTrader 5 Trading History', page_icon='🧊',
         layout='wide', initial_sidebar_state='auto'
     )
+    st.sidebar.header('MetaTrader 5 Trading History')
     with st.sidebar.form('condition'):
         st.header('Condition')
         st.session_state['date_from'] = st.date_input(
@@ -63,23 +66,70 @@ def _execute_streamlit_app(args):
                 retry_count=args.retry_count, date_from=date_from,
                 date_to=date_to, group=st.session_state['group']
             )
-        df_entry = fetch_table_data(
+        df_entry = create_df_entry(
             date_from=date_from, date_to=date_to,
             group=st.session_state['group'], sqlite3_path=args.sqlite3
-        ).pipe(
-            lambda d: d[d['entry'].gt(0)].sort_values('time_msc')
-        ).assign(
-            instrument=lambda d: (d['symbol'] + ' / ' + d['login'].astype(str))
-        ).assign(
-            pl=lambda d: d.groupby('instrument')['profit'].cumsum(),
         )
-        st.header('MetaTrader 5 Trading History')
-        st.subheader('Cumulative PL')
-        st.plotly_chart(
-            px.line(df_entry, x='time', y='pl', color='instrument'),
-            theme='streamlit', use_container_width=True
-        )
-        st.write(df_entry)
+        if df_entry.size:
+            df_pl = df_entry.assign(
+                time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms'),
+                symbol_pl=lambda d: d.groupby('symbol')['profit'].cumsum(),
+                total_pl=lambda d: d['profit'].cumsum(),
+                deal_type=lambda d: d['type'].where(
+                    d['type'].isin({Mt5.DEAL_TYPE_BUY, Mt5.DEAL_TYPE_SELL})
+                ).mask(
+                    d['type'] == Mt5.DEAL_TYPE_BUY, 'BUY'
+                ).mask(
+                    d['type'] == Mt5.DEAL_TYPE_SELL, 'SELL'
+                )
+            )
+            st.subheader('Cumulative PL')
+            fig1 = px.area(
+                df_pl, x='time_msc', y='total_pl',
+                labels={'time_msc': 'Time', 'total_pl': 'PL'}, title='Total PL'
+            )
+            fig1.update_layout(width=800, height=250)
+            st.plotly_chart(fig1, theme='streamlit', use_container_width=True)
+            fig2 = px.line(
+                df_pl, x='time_msc', y='symbol_pl', color='symbol',
+                labels={
+                    'time_msc': 'Time', 'symbol_pl': 'PL', 'symbol': 'Symbol'
+                },
+                title='PL by Symbol'
+            )
+            fig2.update_layout(
+                width=800, height=500,
+                legend=dict(
+                    orientation='h', yanchor='bottom', y=1.02,
+                    xanchor='center', x=0.5
+                )
+            )
+            st.plotly_chart(fig2, theme='streamlit', use_container_width=True)
+            st.subheader('Entry Volume')
+            fig3 = px.scatter(
+                df_pl.dropna(subset=['deal_type']),
+                x='time_msc', y='volume', facet_col='symbol', facet_col_wrap=1,
+                color='symbol', symbol='deal_type',
+                labels={
+                    'time_msc': 'Time', 'volume': 'Volume', 'symbol': 'Symbol',
+                    'deal_type': 'Deal'
+                }
+            )
+            fig3.update_yaxes(matches=None)
+            fig3.update_layout(
+                width=800, height=(200 * df_pl['symbol'].nunique()),
+                legend=dict(
+                    orientation='h', yanchor='bottom', y=1.04,
+                    xanchor='center', x=0.5
+                )
+            )
+            for annotation in fig3['layout']['annotations']:
+                annotation['textangle'] = 0
+            st.plotly_chart(fig3, theme='streamlit', use_container_width=True)
+            st.subheader('Data Frame')
+            st.write(df_pl)
+        else:
+            st.warning('No data')
 
 
 def _parse_arguments():
