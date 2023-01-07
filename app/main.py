@@ -6,8 +6,8 @@ from datetime import date, datetime, time, timedelta
 
 import plotly.express as px
 import streamlit as st
-from util import (fetch_db_data, kill_subprocess, popen_mt5_app,
-                  update_mt5_metrics_db)
+from util import (fetch_table_data, fetch_table_names, kill_subprocess,
+                  popen_mt5_app, update_mt5_metrics_db)
 
 __version__ = 'v0.0.1'
 
@@ -16,8 +16,12 @@ def main():
     args = _parse_arguments()
     logger = logging.getLogger(__name__)
     logger.debug(f'__file__: {__file__}')
-    if 'mt5_process' not in st.session_state:
+    if 'execution_count' not in st.session_state:
+        st.session_state['execution_count'] = 1
         st.session_state['mt5_process'] = popen_mt5_app(path=args.mt5_exe)
+    else:
+        st.session_state['execution_count'] += 1
+    logger.info(f'st.session_state: {st.session_state}')
     try:
         _execute_streamlit_app(args=args)
     except Exception as e:
@@ -33,7 +37,6 @@ def _execute_streamlit_app(args):
         page_title='MetaTrader 5 Trading History', page_icon='🧊',
         layout='wide', initial_sidebar_state='auto'
     )
-    st.header('MetaTrader 5 Trading History')
     with st.sidebar.form('condition'):
         st.header('Condition')
         st.session_state['date_from'] = st.date_input(
@@ -46,38 +49,37 @@ def _execute_streamlit_app(args):
             'Filter for symbols:', value=(st.session_state.get('group') or '*')
         )
         submitted = st.form_submit_button('Submit')
-    if submitted:
-        if st.session_state['date_from'] > st.session_state['date_to']:
-            st.error('The date interval is invalid!', icon='🚨')
-        else:
-            date_from = datetime.combine(st.session_state['date_from'], time())
-            date_to = datetime.combine(
-                (st.session_state['date_to'] + timedelta(days=1)), time()
-            )
+    if st.session_state['date_from'] > st.session_state['date_to']:
+        st.error('The date interval is invalid!', icon='🚨')
+    elif submitted or 'deal' in fetch_table_names(sqlite3_path=args.sqlite3):
+        date_from = datetime.combine(st.session_state['date_from'], time())
+        date_to = datetime.combine(
+            (st.session_state['date_to'] + timedelta(days=1)), time()
+        )
+        if submitted:
             update_mt5_metrics_db(
                 sqlite3_path=args.sqlite3, login=args.mt5_login,
                 password=args.mt5_password, server=args.mt5_server,
                 retry_count=args.retry_count, date_from=date_from,
                 date_to=date_to, group=st.session_state['group']
             )
-            df_deal = fetch_db_data(
-                date_from=date_from, date_to=date_to,
-                group=st.session_state['group'], sqlite3_path=args.sqlite3
-            ).sort_values('time_msc').pipe(
-                lambda d: d[d['entry'].gt(0)]
-            ).assign(
-                instrument=lambda d:
-                (d['symbol'] + ' / ' + d['login'].astype(str))
-            ).assign(
-                pl=lambda d: d.groupby('instrument')['profit'].cumsum(),
-            )
-            st.plotly_chart(
-                px.line(df_deal, x='time', y='pl', color='instrument'),
-                theme='streamlit', use_container_width=True
-            )
-            st.write(df_deal)
-    else:
-        pass
+        df_entry = fetch_table_data(
+            date_from=date_from, date_to=date_to,
+            group=st.session_state['group'], sqlite3_path=args.sqlite3
+        ).pipe(
+            lambda d: d[d['entry'].gt(0)].sort_values('time_msc')
+        ).assign(
+            instrument=lambda d: (d['symbol'] + ' / ' + d['login'].astype(str))
+        ).assign(
+            pl=lambda d: d.groupby('instrument')['profit'].cumsum(),
+        )
+        st.header('MetaTrader 5 Trading History')
+        st.subheader('Cumulative PL')
+        st.plotly_chart(
+            px.line(df_entry, x='time', y='pl', color='instrument'),
+            theme='streamlit', use_container_width=True
+        )
+        st.write(df_entry)
 
 
 def _parse_arguments():

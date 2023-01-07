@@ -14,8 +14,16 @@ class Mt5ResponseError(RuntimeError):
     pass
 
 
-def fetch_db_data(date_from, date_to, group=None, table='deal',
-                  sqlite3_path=':memory:'):
+def fetch_table_names(sqlite3_path=':memory:'):
+    with sqlite3.connect(sqlite3_path) as con:
+        df = pd.read_sql(
+            'SELECT name FROM sqlite_master WHERE type = \'table\';', con
+        )
+    return set(df['name'])
+
+
+def fetch_table_data(date_from, date_to, group=None, table='deal',
+                     sqlite3_path=':memory:'):
     sql = (
         'SELECT * FROM {0} WHERE time >= {1} AND time <= {2}'.format(
             table, int(date_from.timestamp()), int(date_to.timestamp())
@@ -126,7 +134,7 @@ def popen_mt5_app(path, seconds_to_wait=5):
         time.sleep(seconds_to_wait)
         return p
     else:
-        logger.warning('Skip executing MetaTrader5 app')
+        logger.info('Skip executing MetaTrader5 app')
         return None
 
 
