@@ -11,7 +11,7 @@ import streamlit as st
 from util import (create_df_entry, fetch_table_names, kill_subprocess,
                   popen_mt5_app, update_mt5_metrics_db)
 
-__version__ = 'v0.0.2'
+__version__ = 'v0.0.3'
 
 
 def main():
@@ -54,7 +54,8 @@ def _execute_streamlit_app(args):
         submitted = st.form_submit_button('Submit')
     if st.session_state['date_from'] > st.session_state['date_to']:
         st.error('The date interval is invalid!', icon='🚨')
-    elif submitted or 'deal' in fetch_table_names(sqlite3_path=args.sqlite3):
+    elif (submitted
+          or 'history_deals' in fetch_table_names(sqlite3_path=args.sqlite3)):
         date_from = datetime.combine(st.session_state['date_from'], time())
         date_to = datetime.combine(
             (st.session_state['date_to'] + timedelta(days=1)), time()

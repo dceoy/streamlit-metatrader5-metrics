@@ -16,8 +16,8 @@ class Mt5ResponseError(RuntimeError):
 
 def create_df_entry(date_from, date_to, group=None, sqlite3_path=':memory:'):
     return _fetch_table_data(
-        table='deal', date_from=date_from, date_to=date_to, group=group,
-        sqlite3_path=sqlite3_path
+        table='history_deals', date_from=date_from, date_to=date_to,
+        group=group, sqlite3_path=sqlite3_path
     ).pipe(lambda d: d[d['entry'].gt(0)]).sort_values('time_msc')
 
 
@@ -68,12 +68,24 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
         raise e
     else:
         logger.info(f'Update DB data: {sqlite3_path}')
+        cur = con.cursor()
         for t, d in dfs.items():
             d.to_sql(t, con, if_exists='append')
             logger.info(f'Table data updated: {t}')
+            _drop_duplicates_in_sqlite3(cursor=cur, table=t, ids=d.index.names)
     finally:
         Mt5.shutdown()
         con.close()
+
+
+def _drop_duplicates_in_sqlite3(cursor, table, ids):
+    logger = logging.getLogger(__name__)
+    drop_duplicates_sql = (
+        f'DELETE FROM {table} WHERE ROWID NOT IN ('
+        + f'SELECT MIN(ROWID) FROM {table} GROUP BY ' + ', '.join(ids) + ')'
+    )
+    logger.info(f'Drop duplicates: `{drop_duplicates_sql}`')
+    cursor.execute(drop_duplicates_sql)
 
 
 def _initialize_mt5(login=None, password=None, server=None, retry_count=0):
@@ -127,13 +139,13 @@ def _fetch_mt5_history(date_from, date_to, group=None, retry_count=0):
             raise Mt5ResponseError(f'MetaTrader5.{k}() failed.')
     return {
         k: pd.DataFrame(
-            list(res[f'history_{k}s_get']),
-            columns=res[f'history_{k}s_get'][0]._asdict().keys()
+            list(res[f'{k}_get']),
+            columns=res[f'{k}_get'][0]._asdict().keys()
         ).assign(
             login=res['account_info'].login,
             server=res['account_info'].server
         ).set_index(['login', 'ticket'])
-        for k in ['deal', 'order']
+        for k in ['history_deals', 'history_orders']
     }
 
 
