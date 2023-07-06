@@ -11,7 +11,7 @@ import streamlit as st
 from util import (create_df_entry, fetch_table_names, kill_subprocess,
                   popen_mt5_app, update_mt5_metrics_db)
 
-__version__ = 'v0.0.3'
+__version__ = 'v0.0.4'
 
 
 def main():
@@ -65,11 +65,11 @@ def _execute_streamlit_app(args):
                 sqlite3_path=args.sqlite3, login=args.mt5_login,
                 password=args.mt5_password, server=args.mt5_server,
                 retry_count=args.retry_count, date_from=date_from,
-                date_to=date_to, group=st.session_state['group']
+                date_to=date_to, group=st.session_state.get('group')
             )
         df_entry = create_df_entry(
             date_from=date_from, date_to=date_to,
-            group=st.session_state['group'], sqlite3_path=args.sqlite3
+            group=st.session_state.get('group'), sqlite3_path=args.sqlite3
         )
         if df_entry.size:
             df_pl = df_entry.assign(
