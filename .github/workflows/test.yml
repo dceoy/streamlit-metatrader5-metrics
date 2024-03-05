@@ -16,14 +16,3 @@ jobs:
       python-version: '3.10'
       runs-on: windows-latest
       mypy-options: --exclude=build --install-types --non-interactive --ignore-missing-imports
-  test-installation:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.10'
-      - name: Install packages
-        run: |
-          pip install -r requirements.txt

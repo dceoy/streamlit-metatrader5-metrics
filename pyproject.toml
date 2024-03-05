@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamlit-metatrader5-metrics"
+description = "Streamlit application to collect metrics from MetaTrader 5 for Windows"
+authors = [{name = "Daichi Narushima", email = "dnarsil+github@gmail.com"}]
+maintainers = [{name = "Daichi Narushima", email = "dnarsil+github@gmail.com"}]
+license = {file = "LICENSE"}
+readme = "README.md"
+version = "v0.1.0"
+requires-python = ">= 3.8"
+dependencies = [
+  "MetaTrader5 >= 5.0.4200",
+  "pandas >= 2.2.1",
+  "plotly >= 5.19.0",
+  "streamlit >= 1.31.1"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Web Environment",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Topic :: Office/Business :: Financial :: Investment"
+]
+
+[project.urls]
+Repository = "https://github.com/dceoy/streamlit-metatrader5-metrics.git"

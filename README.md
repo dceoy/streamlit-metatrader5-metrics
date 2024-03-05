@@ -15,7 +15,8 @@ Installation
 3.  Install required Python packages.
 
     ```PowerShell
-    $ python -m pip install -r requirements.txt
+    $ cd streamlit-metatrader5-metrics
+    $ python -m pip install -U --no-cache-dir .
     ```
 
 Usage
