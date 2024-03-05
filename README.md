@@ -30,5 +30,5 @@ $ python -m streamlit run .\app\main.py
 Update packages and run a Streamlit server.
 
 ```PowerShell
-$ .\streamlit_run_with_oanda_mt5.bat
+$ . .\streamlit_run_with_oanda_mt5.ps1
 ```

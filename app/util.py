@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 
@@ -23,24 +23,32 @@ def create_df_entry(date_from, date_to, group=None, sqlite3_path=':memory:'):
 
 def _fetch_table_data(table, date_from, date_to, group=None,
                       sqlite3_path=':memory:'):
+    logger = logging.getLogger(__name__)
     sql = (
-        'SELECT * FROM {0} WHERE time >= {1} AND time <= {2}'.format(
-            table, int(date_from.timestamp()), int(date_to.timestamp())
-        ) + (
-            '' if group == '*' or not group else
-            ' AND symbol LIKE {}'.format(group.replace('*', '%'))
+        f'SELECT * FROM {table}'    # nosec B608
+        + ' WHERE time >= {0} AND time <= {1}{2}'.format(
+            int(date_from.timestamp()), int(date_to.timestamp()),
+            (
+                '' if group == '*' or not group else
+                ' AND symbol LIKE {}'.format(group.replace('*', '%'))
+            )
         )
     )
+    logger.info(f'SQL: `{sql}`')
     with sqlite3.connect(sqlite3_path) as con:
         df = pd.read_sql(sql, con)
     return df
 
 
 def fetch_table_names(sqlite3_path=':memory:'):
+    logger = logging.getLogger(__name__)
+    sql = (
+        'SELECT name FROM sqlite_master'    # nosec B608
+        ' WHERE type = \'table\''
+    )
+    logger.info(f'SQL: `{sql}`')
     with sqlite3.connect(sqlite3_path) as con:
-        df = pd.read_sql(
-            'SELECT name FROM sqlite_master WHERE type = \'table\';', con
-        )
+        df = pd.read_sql(sql, con)
     return set(df['name'])
 
 
@@ -80,12 +88,13 @@ def update_mt5_metrics_db(sqlite3_path=':memory:', **kwargs):
 
 def _drop_duplicates_in_sqlite3(cursor, table, ids):
     logger = logging.getLogger(__name__)
-    drop_duplicates_sql = (
-        f'DELETE FROM {table} WHERE ROWID NOT IN ('
-        + f'SELECT MIN(ROWID) FROM {table} GROUP BY ' + ', '.join(ids) + ')'
+    sql = (
+        f'DELETE FROM {table} WHERE ROWID NOT IN ('     # nosec B608
+        + f'SELECT MIN(ROWID) FROM {table} GROUP BY '   # nosec B608
+        + ', '.join(ids) + ')'
     )
-    logger.info(f'Drop duplicates: `{drop_duplicates_sql}`')
-    cursor.execute(drop_duplicates_sql)
+    logger.info(f'SQL: `{sql}`')
+    cursor.execute(sql)
 
 
 def _initialize_mt5(login=None, password=None, server=None, retry_count=0):
@@ -153,7 +162,7 @@ def popen_mt5_app(path, seconds_to_wait=5):
     logger = logging.getLogger(__name__)
     if path:
         logger.info(f'Execute MetaTrader5 app: "{path}"')
-        p = subprocess.Popen(args=[path])
+        p = subprocess.Popen(args=[path])   # nosec B603
         time.sleep(seconds_to_wait)
         return p
     else:
