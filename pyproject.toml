@@ -14,7 +14,7 @@ requires-python = ">= 3.8"
 dependencies = [
   "MetaTrader5 >= 5.0.4200",
   "pandas >= 2.2.1",
-  "plotly >= 5.19.0",
+  "plotly >= 6.7.0",
   "streamlit >= 1.31.1"
 ]
 classifiers = [
