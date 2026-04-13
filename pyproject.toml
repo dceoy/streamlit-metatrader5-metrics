@@ -15,7 +15,7 @@ dependencies = [
   "MetaTrader5 >= 5.0.4200",
   "pandas >= 2.2.1",
   "plotly >= 5.19.0",
-  "streamlit >= 1.31.1"
+  "streamlit >= 1.50.0"
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
