@@ -12,7 +12,7 @@ readme = "README.md"
 version = "v0.1.0"
 requires-python = ">= 3.8"
 dependencies = [
-  "MetaTrader5 >= 5.0.4200",
+  "MetaTrader5 >= 5.0.5735",
   "pandas >= 2.2.1",
   "plotly >= 5.19.0",
   "streamlit >= 1.31.1"
